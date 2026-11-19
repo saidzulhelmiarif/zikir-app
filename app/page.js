@@ -3,6 +3,7 @@ import { merge, lines, pair, tgl, todayWIB } from "../lib/defaults";
 import Form from "../components/Form";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function Home() {
   const { data } = await admin().from("pengaturan").select("data").eq("id", 1).maybeSingle();

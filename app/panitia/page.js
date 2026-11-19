@@ -69,8 +69,10 @@ export default function Panitia() {
     const o = {}; FS.forEach(([k, , t]) => { o[k] = t === "number" ? Number(form[k]) : String(form[k] ?? "").trim(); });
     const bad = !(o.jmin >= 1 && o.jmax >= o.jmin && o.jmax <= 30) || !(o.umin > 0 && o.umax >= o.umin) || o.asn < 0 || !o.tanggal || lines(o.kriteria).some((x) => isNaN(+pair(x)[1]));
     if (bad) return setNote("Periksa isian: tanggal wajib, anggota min ≤ maks (1–30), usia min ≤ maks, bobot nilai berupa angka.");
-    const { error } = await c.from("pengaturan").update({ data: o }).eq("id", 1);
-    setNote(error ? "Gagal menyimpan pengaturan." : "Pengaturan tersimpan dan langsung tampil di halaman publik.");
+    const { data: ses } = await c.auth.getSession();
+    const r = await fetch("/api/pengaturan", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (ses.session?.access_token || "") }, body: JSON.stringify({ data: o }) });
+    const j = await r.json().catch(() => ({}));
+    setNote(r.ok ? "Pengaturan tersimpan. Muat ulang halaman utama untuk melihat perubahan." : j.error || "Gagal menyimpan pengaturan.");
   }
 
   const shown = list.filter((r) => !q || [r.nama, r.kec, r.desa, r.syekh].join(" ").toLowerCase().includes(q.toLowerCase()));
