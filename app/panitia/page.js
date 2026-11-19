@@ -65,6 +65,42 @@ export default function Panitia() {
     const url = URL.createObjectURL(new Blob(["\ufeff" + [head.map(e).join(","), ...rows].join("\n")], { type: "text/csv" }));
     const a = document.createElement("a"); a.href = url; a.download = "pendaftar_lomba_zikir.csv"; a.click(); URL.revokeObjectURL(url);
   }
+  const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+  // Membuka halaman cetak formulir (satu atau banyak grup). Di dialog cetak pilih "Simpan sebagai PDF" untuk mengunduh.
+  async function cetak(rows) {
+    if (!rows.length) return;
+    const w = window.open("", "_blank");
+    if (!w) return setNote("Pop-up diblokir browser. Izinkan pop-up untuk situs ini, lalu coba lagi.");
+    w.document.write("<p style='font-family:sans-serif'>Menyiapkan formulir...</p>");
+    const paths = rows.flatMap((r) => (r.anggota || []).map((m) => m.foto)).filter(Boolean);
+    let url = {};
+    if (paths.length) { const { data } = await c.storage.from("berkas").createSignedUrls(paths, 3600); url = Object.fromEntries((data || []).map((x) => [x.path, x.signedUrl])); }
+    const page = (r) => `<div class="pg">
+<h1>FORMULIR PENDAFTARAN<br>LOMBA ZIKIR MAULID SIMTUDDUROR</h1>
+<h2>HAB Kemenag Ke-81 · Kantor Kementerian Agama Kab. Gayo Lues</h2>
+<table class="kv">
+<tr><td>Kode pendaftaran</td><td>: <b>${esc(r.kode)}</b></td></tr>
+<tr><td>Tanggal mendaftar</td><td>: ${esc(new Date(r.dibuat).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }))} WIB</td></tr>
+<tr><td>Metode</td><td>: ${r.metode === "offline" ? "Offline (berkas fisik diserahkan ke panitia)" : "Online (berkas diunggah)"}</td></tr>
+<tr><td>Nama grup</td><td>: ${esc(r.nama)}</td></tr>
+<tr><td>Asal</td><td>: ${esc(r.desa)}, Kecamatan ${esc(r.kec)}</td></tr>
+<tr><td>Syekh/Radat</td><td>: ${esc(r.syekh)}</td></tr>
+<tr><td>HP/WhatsApp</td><td>: ${esc(r.hp)}</td></tr>
+<tr><td>Pembina/pendamping</td><td>: ${esc(r.pembina || "-")}</td></tr>
+<tr><td>Status</td><td>: ${esc(r.status)}${r.urut ? " · Nomor urut tampil: " + esc(r.urut) : ""}</td></tr>
+</table>
+<h3>Daftar Anggota (${(r.anggota || []).length} orang)</h3>
+<table class="g"><tr><th>No</th><th>Nama</th><th>Umur</th><th>Status</th><th>Berkas</th><th>Pas foto</th></tr>
+${(r.anggota || []).map((m, i) => `<tr><td>${i + 1}</td><td>${esc(m.nama)}</td><td>${esc(m.umur)}</td><td>${esc(m.status)}</td><td>${r.metode === "online" ? "KTP/SK dan foto terunggah" : "&#9744; " + (m.status === "ASN KUA" ? "SK" : "KTP") + " &nbsp; &#9744; Pas foto"}</td><td class="ph">${m.foto && url[m.foto] ? `<img src="${esc(url[m.foto])}">` : ""}</td></tr>`).join("")}
+</table>
+<p class="sm">Pernyataan: data di atas benar dan grup bersedia mengikuti seluruh ketentuan lomba.</p>
+<div class="ttd"><div>Penanggung Jawab Grup<br><br><br><br>( ${esc(r.syekh)} )</div><div>Blangkejeren, ........................ 20....<br>Panitia Penerima<br><br><br>( ........................ )</div></div>
+</div>`;
+    const css = "body{font-family:Arial,sans-serif;font-size:12px;color:#000;margin:0}.pg{padding:24px 32px;page-break-after:always}.pg:last-child{page-break-after:auto}h1{font-size:16px;text-align:center;margin:0 0 4px}h2{font-size:12px;text-align:center;font-weight:normal;margin:0 0 16px}h3{font-size:13px;margin:16px 0 6px}table{border-collapse:collapse;width:100%}.kv td{padding:3px 4px;vertical-align:top}.kv td:first-child{width:150px}.g th,.g td{border:1px solid #000;padding:5px;text-align:left;vertical-align:middle}.g th{background:#eee}.ph{width:56px;height:74px;text-align:center}.ph img{width:50px;height:67px;object-fit:cover}.sm{margin-top:14px}.ttd{display:flex;justify-content:space-between;margin-top:20px}.ttd div{text-align:center;width:46%}@page{size:A4;margin:12mm}";
+    w.document.open();
+    w.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Formulir Pendaftaran</title><style>${css}</style></head><body>${rows.map(page).join("")}<script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script></body></html>`);
+    w.document.close();
+  }
   async function simpan() {
     const o = {}; FS.forEach(([k, , t]) => { o[k] = t === "number" ? Number(form[k]) : String(form[k] ?? "").trim(); });
     const bad = !(o.jmin >= 1 && o.jmax >= o.jmin && o.jmax <= 30) || !(o.umin > 0 && o.umax >= o.umin) || o.asn < 0 || !o.tanggal || lines(o.kriteria).some((x) => isNaN(+pair(x)[1]));
@@ -99,7 +135,7 @@ export default function Panitia() {
       <div className="card"><b>{list.filter((r) => r.status === "Terverifikasi").length}</b>Terverifikasi</div>
       <div className="card"><b>{list.filter((r) => r.urut).length}</b>Sudah diundi</div>
     </div>
-    <div className="tools"><input placeholder="Cari grup, kecamatan, syekh" value={q} onChange={(e) => setQ(e.target.value)} /><button className="btn sec" onClick={undi}>Undi Nomor Urut</button><button className="btn sec" onClick={csv}>Ekspor CSV</button></div>
+    <div className="tools"><input placeholder="Cari grup, kecamatan, syekh" value={q} onChange={(e) => setQ(e.target.value)} /><button className="btn sec" onClick={undi}>Undi Nomor Urut</button><button className="btn sec" onClick={csv}>Ekspor CSV</button><button className="btn sec" onClick={() => cetak(shown)}>Cetak Semua Formulir</button></div>
     {note && <div className="hint">{note}</div>}
     <div className="scroll"><table>
       <thead><tr><th>Urut</th><th>Grup</th><th>Asal</th><th>Syekh / HP</th><th>Status</th><th></th></tr></thead>
@@ -112,7 +148,7 @@ export default function Panitia() {
             <td>{r.desa}, {r.kec} · {r.metode === "offline" ? "Offline" : "Online"}{r.metode === "online" && r.berkas !== "lengkap" ? " (berkas belum lengkap)" : ""}</td>
             <td>{r.syekh} / {r.hp}</td>
             <td><button className={"badge" + (r.status === "Terverifikasi" ? " v" : "")} onClick={() => toggle(r)}>{r.status}</button></td>
-            <td><button className="btn dng" onClick={() => hapus(r)}>Hapus</button></td>
+            <td><button className="btn sec" onClick={() => cetak([r])}>Unduh Formulir</button> <button className="btn dng" onClick={() => hapus(r)}>Hapus</button></td>
           </tr>,
           open[r.kode] && <tr key={r.kode + "d"}><td colSpan={6} className="hint">
             {(r.anggota || []).map((m, i) => (<div key={i}>{i + 1}. {m.nama} ({m.umur}, {m.status}) {[["dok", "KTP/SK"], ["foto", "Foto"]].map(([k, l]) => m[k] && links[r.kode]?.[m[k]] && <a key={k} className="lnk" href={links[r.kode][m[k]]} target="_blank" rel="noopener noreferrer">{l}</a>)}</div>))}
